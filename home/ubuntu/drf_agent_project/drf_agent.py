@@ -18,7 +18,7 @@ def load_embedding_model(model_name):
     return SentenceTransformer(model_name)
 
 import streamlit as st
-client = OpenAI(api_key=st.secrets["Opem_AI_Key"])
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # --- RAG Tool Implementation (from Phase 1) ---
 
