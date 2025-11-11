@@ -12,7 +12,8 @@ FAISS_INDEX_FILE = os.path.join(KB_DIR, "drf_faiss_index.bin")
 CHUNKS_LIST_FILE = os.path.join(KB_DIR, "drf_chunks_list.txt")
 
 # Initialize OpenAI client (for sandbox testing)
-client = OpenAI()
+import streamlit as st
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # --- RAG Tool Implementation (from Phase 1) ---
 
