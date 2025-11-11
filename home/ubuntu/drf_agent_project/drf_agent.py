@@ -3,7 +3,7 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
-
+import streamlit as st 
 # --- Configuration ---
 MODEL_NAME = 'all-MiniLM-L6-v2'
 PROJECT_DIR = "/home/ubuntu/drf_agent_project"
@@ -12,11 +12,26 @@ FAISS_INDEX_FILE = os.path.join(KB_DIR, "drf_faiss_index.bin")
 CHUNKS_LIST_FILE = os.path.join(KB_DIR, "drf_chunks_list.txt")
 
 # Initialize OpenAI client (for sandbox testing)
+@st.cache_resource
+def load_embedding_model(model_name):
+    """Loads the SentenceTransformer model and caches it."""
+    return SentenceTransformer(model_name)
+
 import streamlit as st
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+client = OpenAI(api_key=st.secrets["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"])
 
 # --- RAG Tool Implementation (from Phase 1) ---
 
+class DRFKnowledgeBase:
+    def __init__(self):
+        # CHANGE THIS LINE: Call the cached function to load the model
+        self.model = load_embedding_model(MODEL_NAME) 
+        
+        # ... (rest of the __init__ method remains the same)
+        self.index = faiss.read_index(FAISS_INDEX_FILE)
+        with open(CHUNKS_LIST_FILE, 'r', encoding='utf-8') as f:
+            self.chunks = f.read().split('\n---\n')
+            
 class DRFKnowledgeBase:
     def __init__(self):
         self.model = SentenceTransformer(MODEL_NAME)
