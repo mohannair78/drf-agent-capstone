@@ -3,7 +3,7 @@ import os
 from drf_agent import DRFAgent # Import the Agent class
 
 # --- Configuration ---
-PROJECT_DIR = "/home/ubuntu/drf_agent_project"
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 KB_DIR = os.path.join(PROJECT_DIR, "knowledge_base")
 FAISS_INDEX_FILE = os.path.join(KB_DIR, "drf_faiss_index.bin")
 
