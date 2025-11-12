@@ -6,7 +6,7 @@ from openai import OpenAI
 import streamlit as st 
 # --- Configuration ---
 MODEL_NAME = 'all-MiniLM-L6-v2'
-PROJECT_DIR = "/home/ubuntu/drf_agent_project"
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 KB_DIR = os.path.join(PROJECT_DIR, "knowledge_base")
 FAISS_INDEX_FILE = os.path.join(KB_DIR, "drf_faiss_index.bin")
 CHUNKS_LIST_FILE = os.path.join(KB_DIR, "drf_chunks_list.txt")
