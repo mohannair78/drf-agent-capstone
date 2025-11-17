@@ -1,93 +1,140 @@
-import streamlit as st
 import os
+import faiss
+import numpy as np
+from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
-from drf_agent import DRFAgent # Import the Agent class
 
 # --- Configuration ---
+MODEL_NAME = 'all-MiniLM-L6-v2'
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 KB_DIR = os.path.join(PROJECT_DIR, "knowledge_base")
 FAISS_INDEX_FILE = os.path.join(KB_DIR, "drf_faiss_index.bin")
+CHUNKS_LIST_FILE = os.path.join(KB_DIR, "drf_chunks_list.txt")
 
-# --- Configure Gemini API Key from Streamlit Secrets ---
-try:
-    # Try to read from Streamlit secrets (for Streamlit Cloud deployment)
-    gemini_api_key = st.secrets.get("GOOGLE_API_KEY")
-    if gemini_api_key:
-        genai.configure(api_key=gemini_api_key)
-        os.environ["GOOGLE_API_KEY"] = gemini_api_key
-except Exception as e:
-    # If secrets are not available, try environment variable (for local testing)
-    if "GOOGLE_API_KEY" not in os.environ:
-        st.error("Gemini API key not found. Please set GOOGLE_API_KEY in Streamlit secrets or environment variables.")
+# Initialize Gemini client (for sandbox testing)
+# The API key is read from environment variable GOOGLE_API_KEY
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+model = genai.GenerativeModel("gemini-2.5-flash")
 
-# --- Initialize Agent (Cached to run only once) ---
-@st.cache_resource
-def initialize_agent():
-    """Initializes the DRFAgent and its RAG components."""
-    if not os.path.exists(FAISS_INDEX_FILE):
-        st.error("FAISS index not found. Please ensure Phase 1 was completed successfully.")
-        return None
+# --- RAG Tool Implementation (from Phase 1) ---
+
+class DRFKnowledgeBase:
+    def __init__(self):
+        self.model = SentenceTransformer(MODEL_NAME)
+        self.index = faiss.read_index(FAISS_INDEX_FILE)
+        with open(CHUNKS_LIST_FILE, 'r', encoding='utf-8') as f:
+            self.chunks = f.read().split('\n---\n')
+
+    def retrieve_context(self, query, k=3):
+        """Retrieves the top k most relevant chunks for a given query."""
+        query_embedding = self.model.encode([query], convert_to_numpy=True)
+        D, I = self.index.search(query_embedding, k)
+        retrieved_chunks = [self.chunks[i] for i in I[0]]
+        return "\n\n".join(retrieved_chunks)
+
+# --- Agent Implementation (Phase 2) ---
+
+class DRFAgent:
+    def __init__(self):
+        self.kb = DRFKnowledgeBase()
+        self.system_prompt = self._get_system_prompt()
+
+    def _get_system_prompt(self):
+        """Crafts the detailed system prompt for the LLM Agent."""
+        return """
+You are the 'Executive Communication Coach,' an AI Agent specializing in Leadership Communication, Digital Emotional Intelligence (DEQ), and the Digital Resonance Framework (DRF).
+Your goal is to analyze a user's communication draft and provide structured, actionable feedback based *only* on the knowledge provided by your RAG tool.
+
+**Your Persona and Rules:**
+1. **Role:** Executive Communication Coach. Your tone must be professional, encouraging, and authoritative.
+2. **Knowledge Source:** You MUST use the `DRFKnowledgeBase` tool to retrieve relevant context before formulating your response. Do not use external knowledge.
+3. **Analysis:** Analyze the user's text for clarity, tone, emotional intelligence (DEQ), and alignment with the DRF principles.
+4. **Output Format:** Your response MUST be structured as follows:
+    a. **Digital Resonance Score (1-10):** A single number assessing the overall effectiveness and DEQ alignment of the communication.
+    b. **Analysis Summary:** A brief paragraph explaining the score based on DRF principles.
+    c. **Actionable Feedback (3 Points):** A bulleted list of exactly three specific, actionable suggestions for improvement, citing the relevant DRF principle (e.g., "Improve clarity by focusing on Digital Self-Regulation: Boundary Management").
+    d. **DRF Principle Reference:** A brief quote or summary of the most relevant DRF principle from the retrieved context.
+    e. **Suggested Revised Draft:** A complete rewrite of the user's original communication draft, incorporating all three actionable feedback points. The revised draft should maintain the original intent and tone but enhance clarity, emotional intelligence, and alignment with DRF principles. Make it ready to copy and paste.
+
+**Tool Description:**
+- **Tool Name:** `DRFKnowledgeBase`
+- **Function:** `retrieve_context(query: str)`
+- **Purpose:** Use this tool to search the Digital Resonance Framework knowledge base. Your query should be a question that helps you find the specific DRF principles needed to analyze the user's communication.
+"""
+
+    def analyze_communication(self, user_communication):
+        """Runs the RAG-Agent pipeline to analyze the user's communication."""
+        
+        # 1. Agent decides on the RAG query (based on the user's input)
+        rag_query = "Summarize the core principles of the Digital Resonance Framework and Digital Emotional Intelligence."
+        
+        # 2. Agent calls the RAG tool
+        retrieved_context = self.kb.retrieve_context(rag_query, k=5) # Retrieve 5 chunks for richer context
+        
+        # 3. Agent formulates the final prompt to the LLM
+        full_prompt = f"""
+{self.system_prompt}
+
+**Retrieved DRF Knowledge (from RAG Tool):**
+---
+{retrieved_context}
+---
+
+**User Communication Draft to Analyze:**
+---
+{user_communication}
+---
+
+Please analyze the User Communication Draft and provide your structured feedback based *only* on the provided DRF Knowledge.
+"""
+        
+        # 4. LLM call to generate the final response using Gemini
+        print("Sending analysis request to Gemini 2.5 Flash...")
+        response = model.generate_content(full_prompt)
+        
+        return response.text
+
+if __name__ == "__main__":
     try:
         agent = DRFAgent()
-        return agent
+        
+        # --- Test Communication Drafts ---
+        draft_1 = """
+Subject: URGENT: Need that report ASAP!
+Team, I need the Q3 report on my desk by 9 AM tomorrow. No excuses. This is a priority and I don't have time to chase people down. Just get it done.
+- [Leader's Name]
+"""
+        
+        print("="*80)
+        print("ANALYZING DRAFT 1: Aggressive/Urgent Email")
+        print("="*80)
+        feedback_1 = agent.analyze_communication(draft_1)
+        print(feedback_1)
+        
+        draft_3 = """
+Subject: Important Update Regarding Company Structure
+Team, as part of our ongoing commitment to efficiency and market responsiveness, we are announcing a necessary restructuring, effective immediately. This decision was made after careful consideration by the leadership team to ensure the long-term viability of the company. We understand this news may cause uncertainty, but we are confident this is the right direction. More details will be shared by your direct managers in the coming days. Please direct all immediate questions to your department head.
+— The Leadership Team
+"""
+
+        print("\n\n"+"="*80)
+        print("ANALYZING DRAFT 3: Sensitive Restructuring Announcement")
+        print("="*80)
+        feedback_3 = agent.analyze_communication(draft_3)
+        print(feedback_3)
+
+        draft_2 = """
+Subject: Quick check-in on the Q3 report
+Hi Team,
+I hope you're all having a productive week. I wanted to quickly check in on the Q3 report. I know everyone is busy, but it would be helpful to have it by tomorrow morning so I can review it before the leadership meeting. Please let me know if there are any roadblocks I can help clear. Thanks!
+- [Leader's Name]
+"""
+        
+        print("\n\n"+"="*80)
+        print("ANALYZING DRAFT 2: Balanced/Collaborative Email")
+        print("="*80)
+        feedback_2 = agent.analyze_communication(draft_2)
+        print(feedback_2)
+        
     except Exception as e:
-        st.error(f"Agent Initialization failed. Check the console for errors and ensure the FAISS index was created.")
-        return None
-
-agent = initialize_agent()
-
-# --- Streamlit App Layout ---
-st.set_page_config(
-    page_title="DRF Communication Coach Agent",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-st.title("🗣️ Digital Resonance Framework (DRF) Communication Coach")
-st.subheader("Your AI Capstone Project: Real-time feedback based on your proprietary framework.")
-
-if agent:
-    # Input Area
-    st.markdown("---")
-    st.markdown("### 1. Enter Your Communication Draft")
-    user_input = st.text_area(
-        "Paste your email, memo, or script here:",
-        height=250,
-        placeholder="e.g., 'Team, I need the Q3 report on my desk by 9 AM tomorrow. No excuses. Just get it done.'"
-    )
-
-    # Analysis Button
-    if st.button("Analyze with DRF Agent", type="primary", use_container_width=True):
-        if user_input:
-            with st.spinner("DRF Agent is analyzing your draft..."):
-                try:
-                    # Call the agent's analysis method
-                    feedback = agent.analyze_communication(user_input)
-                    
-                    st.markdown("---")
-                    st.markdown("### 2. Agent Feedback (DRF Analysis)")
-                    
-                    # Display the structured feedback
-                    st.markdown(feedback)
-                    
-                except Exception as e:
-                    st.error(f"An error occurred during analysis: {e}")
-        else:
-            st.warning("Please enter a communication draft to analyze.")
-
-    # Sidebar for Context
-    st.sidebar.header("Project Context")
-    st.sidebar.markdown(
-        """
-        This application is your Capstone Project, demonstrating:
-        - **RAG (Module 1):** Injecting your DRF knowledge.
-        - **AI Agents (Module 4):** Autonomous decision-making and tool use.
-        - **App Building (Module 5):** Deployable, user-friendly interface.
-        """
-    )
-    st.sidebar.info("The Agent's feedback is generated *only* from the knowledge you provided in the manuscript PDF.")
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Powered by:** Gemini 2.5 Flash API")
-
-else:
-    st.error("Agent initialization failed. Check the console for errors and ensure the FAISS index was created.")
+        print(f"An error occurred during Agent execution: {e}")
