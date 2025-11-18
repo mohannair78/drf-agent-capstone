@@ -44,7 +44,7 @@ st.set_page_config(
 )
 
 st.title("🗣️ Digital Resonance Framework (DRF) Communication Coach")
-st.subheader("Your AI Capstone Project: Real-time feedback based on your proprietary framework.")
+st.subheader("AI Capstone Project: Real-time feedback based on proprietary framework.")
 
 if agent:
     # Input Area
