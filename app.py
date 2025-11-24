@@ -79,13 +79,13 @@ if agent:
     st.sidebar.header("Project Context")
     st.sidebar.markdown(
         """
-        This application is your Capstone Project, demonstrating:
+        This application is the IIT Patna Capstone Project, demonstrating:
         - **RAG (Module 1):** Injecting your DRF knowledge.
         - **AI Agents (Module 4):** Autonomous decision-making and tool use.
         - **App Building (Module 5):** Deployable, user-friendly interface.
         """
     )
-    st.sidebar.info("The Agent's feedback is generated *only* from the knowledge you provided in the manuscript PDF.")
+    st.sidebar.info("The Agent's feedback is generated *only* from the knowledge provided in the manuscript PDF.")
     st.sidebar.markdown("---")
     st.sidebar.markdown("**Powered by:** Gemini 2.5 Flash API")
 
